@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { maskDeep, maskEmail, maskPhone, REDACTED, sensitivityOf } from './sensitive-data';
 
 describe('sensitivityOf', () => {
@@ -95,5 +96,18 @@ describe('maskDeep', () => {
     expect(maskDeep(42)).toBe(42);
     expect(maskDeep(null)).toBeNull();
     expect(maskDeep({ createdAt: date })).toEqual({ createdAt: date });
+
+    class Socket {
+      password = 'not-walked-into';
+    }
+    const socket = new Socket();
+    expect(maskDeep(socket)).toBe(socket);
+  });
+
+  it('masks plain objects created in another realm', () => {
+    const foreign: unknown = runInNewContext(
+      '({ password: "hunter2", owner: { email: "jane@example.com" } })',
+    );
+    expect(maskDeep(foreign)).toEqual({ password: REDACTED, owner: { email: 'j***@example.com' } });
   });
 });

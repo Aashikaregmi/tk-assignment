@@ -1,5 +1,7 @@
 import { plainToInstance, Type } from 'class-transformer';
-import { IsInt, Max, Min, validateSync } from 'class-validator';
+import { IsIn, IsInt, Max, Min, validateSync } from 'class-validator';
+
+const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 
 export class AppConfig {
   @Type(() => Number)
@@ -7,6 +9,9 @@ export class AppConfig {
   @Min(1)
   @Max(65535)
   PORT: number = 3000;
+
+  @IsIn(LOG_LEVELS)
+  LOG_LEVEL: (typeof LOG_LEVELS)[number] = 'info';
 }
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {

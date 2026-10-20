@@ -64,6 +64,6 @@ function maskEntry(key: string, value: unknown): unknown {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return false;
-  const proto: unknown = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
+  const proto = Object.getPrototypeOf(value) as object | null;
+  return proto === null || Object.getPrototypeOf(proto) === null;
 }
