@@ -9,13 +9,13 @@
   },
   "scripts": {
     "build": "nest build",
-    "start": "node dist/main",
-    "start:dev": "nest start --watch",
+    "start": "node --env-file-if-exists=.env dist/main",
+    "start:dev": "nest start --watch --exec \"node --env-file-if-exists=.env\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check . && npm run lint:arch",
     "lint:arch": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --write .",
-    "test": "jest --passWithNoTests"
+    "test": "jest"
   },
   "jest": {
     "rootDir": "src",
@@ -32,6 +32,9 @@
       "^@shared/(.*)$": "<rootDir>/shared/$1",
       "^@modules/(.*)$": "<rootDir>/modules/$1"
     },
+    "setupFiles": [
+      "reflect-metadata"
+    ],
     "testEnvironment": "node"
   },
   "dependencies": {
