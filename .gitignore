@@ -1,0 +1,21 @@
+# Confidential brief and local AI tooling
+*.pdf
+CLAUDE.md
+.claude/
+
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Environment: only the example is committed
+.env
+.env.*
+!.env.example
+
+# Logs, OS and editor files
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
