@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "incremental": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "paths": {
+      "@shared/*": ["src/shared/*"],
+      "@modules/*": ["src/modules/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
+}
