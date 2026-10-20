@@ -1,0 +1,15 @@
+{
+  "rootDir": "..",
+  "testRegex": "test/.*\\.e2e-spec\\.ts$",
+  "transform": {
+    "^.+\\.ts$": "ts-jest"
+  },
+  "moduleFileExtensions": ["ts", "js", "json"],
+  "moduleNameMapper": {
+    "^@shared/(.*)$": "<rootDir>/src/shared/$1",
+    "^@modules/(.*)$": "<rootDir>/src/modules/$1"
+  },
+  "setupFiles": ["reflect-metadata"],
+  "globalSetup": "<rootDir>/test/global-setup.ts",
+  "testEnvironment": "node"
+}
