@@ -2,11 +2,13 @@
 *.pdf
 CLAUDE.md
 .claude/
+STACK.md
 
 # Dependencies and build output
 node_modules/
 dist/
 coverage/
+*.tsbuildinfo
 
 # Environment: only the example is committed
 .env
