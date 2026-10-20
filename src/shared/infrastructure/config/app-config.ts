@@ -1,5 +1,5 @@
 import { plainToInstance, Type } from 'class-transformer';
-import { IsIn, IsInt, Max, Min, validateSync } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsString, Max, Min, validateSync } from 'class-validator';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 
@@ -12,6 +12,28 @@ export class AppConfig {
 
   @IsIn(LOG_LEVELS)
   LOG_LEVEL: (typeof LOG_LEVELS)[number] = 'info';
+
+  @IsString()
+  @IsNotEmpty()
+  DB_HOST: string = 'localhost';
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  DB_PORT: number = 5432;
+
+  @IsString()
+  @IsNotEmpty()
+  DB_NAME!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  DB_USER!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  DB_PASSWORD!: string;
 }
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {

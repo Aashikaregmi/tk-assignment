@@ -3,12 +3,34 @@ name: vizy
 services:
   api:
     build: .
+    environment:
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME:?set DB_NAME in .env}
+      DB_USER: ${DB_USER:?set DB_USER in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
     ports:
       - 127.0.0.1:3000:3000
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
+        condition: service_healthy
+
+  # One-off: applies migrations as the schema owner, then exits. The API never gets owner credentials.
+  migrate:
+    build: .
+    command:
+      - node
+      - node_modules/typeorm/cli.js
+      - migration:run
+      - --dataSource=dist/shared/infrastructure/database/migration-data-source.js
+    environment:
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME:?set DB_NAME in .env}
+      DB_OWNER_USER: ${DB_OWNER_USER:?set DB_OWNER_USER in .env}
+      DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD in .env}
+    depends_on:
+      postgres:
         condition: service_healthy
 
   postgres:
