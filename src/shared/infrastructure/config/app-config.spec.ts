@@ -2,15 +2,19 @@ import { loadConfig } from './app-config';
 
 describe('loadConfig', () => {
   it('applies defaults for unset variables', () => {
-    expect(loadConfig({}).PORT).toBe(3000);
+    expect(loadConfig({})).toEqual({ PORT: 3000, LOG_LEVEL: 'info' });
   });
 
   it('converts numeric strings', () => {
     expect(loadConfig({ PORT: '8080' }).PORT).toBe(8080);
   });
 
-  it('keeps only declared variables', () => {
-    expect(loadConfig({ PORT: '8080', PATH: '/usr/bin' })).toEqual({ PORT: 8080 });
+  it('drops undeclared variables', () => {
+    expect(loadConfig({ PATH: '/usr/bin' })).not.toHaveProperty('PATH');
+  });
+
+  it('rejects unknown log levels', () => {
+    expect(() => loadConfig({ LOG_LEVEL: 'verbose' })).toThrow(/LOG_LEVEL/);
   });
 
   it.each(['abc', '', '0', '70000'])('rejects PORT=%p', (port) => {
