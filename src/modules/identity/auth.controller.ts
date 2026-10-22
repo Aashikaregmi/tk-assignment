@@ -6,6 +6,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { Public } from './auth.decorators';
 import { AuthService } from './auth.service';
 import { AccessTokenDto, LoginDto } from './login.dto';
 
@@ -14,6 +15,7 @@ import { AccessTokenDto, LoginDto } from './login.dto';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   // Per client IP, in memory: several instances would need the throttler's Redis storage.
