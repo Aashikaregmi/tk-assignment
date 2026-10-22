@@ -1,18 +1,19 @@
 import { plainToInstance, Type } from 'class-transformer';
-import { IsIn, IsInt, IsNotEmpty, IsString, Max, Min, validateSync } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  Max,
+  Min,
+  MinLength,
+  validateSync,
+} from 'class-validator';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 
-export class AppConfig {
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(65535)
-  PORT: number = 3000;
-
-  @IsIn(LOG_LEVELS)
-  LOG_LEVEL: (typeof LOG_LEVELS)[number] = 'info';
-
+// Enough for the migration CLI and DB tests, which must not need app secrets.
+export class DatabaseConfig {
   @IsString()
   @IsNotEmpty()
   DB_HOST: string = 'localhost';
@@ -36,12 +37,31 @@ export class AppConfig {
   DB_PASSWORD!: string;
 }
 
-export function loadConfig(env: Record<string, string | undefined>): AppConfig {
-  const config = plainToInstance(AppConfig, env);
+export class AppConfig extends DatabaseConfig {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  PORT: number = 3000;
+
+  @IsIn(LOG_LEVELS)
+  LOG_LEVEL: (typeof LOG_LEVELS)[number] = 'info';
+
+  // HS256 key: at least 256 bits.
+  @IsString()
+  @MinLength(32)
+  JWT_SECRET!: string;
+}
+
+export function loadConfig<T extends object>(
+  configClass: new () => T,
+  env: Record<string, string | undefined>,
+): T {
+  const config = plainToInstance(configClass, env);
   // whitelist strips undeclared variables (PATH, HOME, ...).
   const errors = validateSync(config, { whitelist: true });
   if (errors.length > 0) {
-    // Messages name the variable, never its value (it may be a secret).
+    // Messages name the variable, never its value.
     const problems = errors.flatMap((error) => Object.values(error.constraints ?? {}));
     throw new Error(`Invalid environment configuration:\n- ${problems.join('\n- ')}`);
   }

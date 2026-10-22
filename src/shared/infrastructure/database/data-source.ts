@@ -1,7 +1,7 @@
 import { DataSourceOptions } from 'typeorm';
-import { AppConfig } from '../config/app-config';
+import { DatabaseConfig } from '../config/app-config';
 
-export function dataSourceOptions(config: AppConfig): DataSourceOptions {
+export function dataSourceOptions(config: DatabaseConfig): DataSourceOptions {
   return {
     type: 'postgres',
     host: config.DB_HOST,

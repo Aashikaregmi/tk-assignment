@@ -1,4 +1,4 @@
-import { loadConfig } from '@shared/infrastructure/config/app-config';
+import { DatabaseConfig, loadConfig } from '@shared/infrastructure/config/app-config';
 import { asOwner, dataSourceOptions } from '@shared/infrastructure/database/data-source';
 import { TypeOrmUnitOfWork } from '@shared/infrastructure/database/typeorm-unit-of-work';
 import { DataSource } from 'typeorm';
@@ -10,9 +10,13 @@ describe('TypeOrmUnitOfWork', () => {
   let uow: TypeOrmUnitOfWork;
 
   beforeAll(async () => {
-    owner = await new DataSource(dataSourceOptions(loadConfig(asOwner(testEnv())))).initialize();
+    owner = await new DataSource(
+      dataSourceOptions(loadConfig(DatabaseConfig, asOwner(testEnv()))),
+    ).initialize();
     await owner.query('CREATE TABLE IF NOT EXISTS uow_probe (value text NOT NULL)');
-    db = await new DataSource(dataSourceOptions(loadConfig(testEnv()))).initialize();
+    db = await new DataSource(
+      dataSourceOptions(loadConfig(DatabaseConfig, testEnv())),
+    ).initialize();
     uow = new TypeOrmUnitOfWork(db);
   });
 

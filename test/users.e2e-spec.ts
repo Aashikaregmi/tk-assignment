@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { UsersService } from '@modules/identity';
 import { UserOrmEntity } from '@modules/identity/user.orm-entity';
 import { Role } from '@shared/domain/role';
-import { loadConfig } from '@shared/infrastructure/config/app-config';
+import { DatabaseConfig, loadConfig } from '@shared/infrastructure/config/app-config';
 import { dataSourceOptions } from '@shared/infrastructure/database/data-source';
 import { TypeOrmUnitOfWork } from '@shared/infrastructure/database/typeorm-unit-of-work';
 import { DataSource } from 'typeorm';
@@ -16,7 +16,9 @@ describe('UsersService', () => {
   let users: UsersService;
 
   beforeAll(async () => {
-    db = await new DataSource(dataSourceOptions(loadConfig(testEnv()))).initialize();
+    db = await new DataSource(
+      dataSourceOptions(loadConfig(DatabaseConfig, testEnv())),
+    ).initialize();
     users = new UsersService(new TypeOrmUnitOfWork(db));
   });
 

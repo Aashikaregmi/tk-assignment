@@ -37,9 +37,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Generate throwaway database passwords
+      - name: Generate throwaway secrets
         run: |
-          for name in DB_OWNER_PASSWORD DB_PASSWORD; do
+          for name in DB_OWNER_PASSWORD DB_PASSWORD JWT_SECRET; do
             value=$(openssl rand -hex 24)
             echo "::add-mask::$value"
             echo "$name=$value" >> "$GITHUB_ENV"
