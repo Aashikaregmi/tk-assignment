@@ -32,6 +32,10 @@ export function canRead(actor: Actor, application: AccessView): boolean {
   }
 }
 
+export function canCreate(actor: Actor): boolean {
+  return actor.role === 'SALES' || actor.role === 'ADMIN';
+}
+
 // Edit and submit. Whether the status allows it is the aggregate's rule.
 export function canEdit(actor: Actor, application: AccessView): boolean {
   if (actor.role === 'ADMIN') return true;
@@ -41,6 +45,10 @@ export function canEdit(actor: Actor, application: AccessView): boolean {
 // Not visible → 404 (no existence leak); visible but not editable → 403.
 export function assertCanRead(actor: Actor, application: AccessView): void {
   if (!canRead(actor, application)) throw new ApplicationNotFound();
+}
+
+export function assertCanCreate(actor: Actor): void {
+  if (!canCreate(actor)) throw new ApplicationAccessDenied('create');
 }
 
 export function assertCanEdit(actor: Actor, application: AccessView): void {

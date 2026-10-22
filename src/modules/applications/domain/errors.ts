@@ -33,6 +33,6 @@ export class ApplicationNotFound extends DomainError {
 
 export class ApplicationAccessDenied extends DomainError {
   constructor(action: string) {
-    super('forbidden', 'APPLICATION_ACCESS_DENIED', `Your role cannot ${action} this application`);
+    super('forbidden', 'APPLICATION_ACCESS_DENIED', `Your role cannot ${action} applications`);
   }
 }
