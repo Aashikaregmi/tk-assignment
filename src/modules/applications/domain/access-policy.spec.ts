@@ -1,5 +1,5 @@
 import type { Actor } from '@shared/domain/role';
-import { assertCanEdit, assertCanRead, readScopeFor } from './access-policy';
+import { assertCanAssign, assertCanEdit, assertCanRead, readScopeFor } from './access-policy';
 import { ApplicationStatus } from './application-status';
 import { ApplicationAccessDenied, ApplicationNotFound } from './errors';
 
@@ -53,5 +53,16 @@ describe('assertCanEdit', () => {
     ['REVIEWER gets 404 for a draft it cannot see', REVIEWER, 'DRAFT', ApplicationNotFound],
   ])('%s', (_case, actor, status, outcome) => {
     expectOutcome(() => assertCanEdit(actor, byA(status)), outcome);
+  });
+});
+
+describe('assertCanAssign', () => {
+  it.each<[string, Actor, ApplicationStatus, Outcome]>([
+    ['ADMIN assigns', ADMIN, 'SUBMITTED', 'ok'],
+    ['SALES cannot assign on their own application', SALES_A, 'SUBMITTED', ApplicationAccessDenied],
+    ["SALES gets 404 for another's application", SALES_B, 'SUBMITTED', ApplicationNotFound],
+    ['REVIEWER cannot assign', REVIEWER, 'SUBMITTED', ApplicationAccessDenied],
+  ])('%s', (_case, actor, status, outcome) => {
+    expectOutcome(() => assertCanAssign(actor, byA(status)), outcome);
   });
 });

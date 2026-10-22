@@ -3,14 +3,20 @@ import type { Actor } from '@shared/domain/role';
 import {
   ApplicationAccessDenied,
   ApplicationNotEditable,
+  ApplicationNotAssignable,
   ApplicationNotFound,
   InvalidApplicationData,
+  InvalidReviewer,
   InvalidStatusTransition,
+  NotAssignedReviewer,
 } from '../domain/errors';
 import { MerchantApplication, MerchantApplicationState } from '../domain/merchant-application';
 import { ApplicationDetailsInput } from './application-input';
 import { ApplicationRepository } from './application-repository';
+import { AssignReviewerCommand, AssignReviewerHandler } from './assign-reviewer';
 import { CreateApplicationCommand, CreateApplicationHandler } from './create-application';
+import { RecordDecisionCommand, RecordDecisionHandler } from './record-decision';
+import { ReviewerDirectory } from './reviewer-directory';
 import { SubmitApplicationCommand, SubmitApplicationHandler } from './submit-application';
 import { UpdateApplicationCommand, UpdateApplicationHandler } from './update-application';
 
@@ -49,7 +55,12 @@ class InMemoryApplications implements ApplicationRepository {
 const SALES_A: Actor = { id: 'sales-a', role: 'SALES' };
 const SALES_B: Actor = { id: 'sales-b', role: 'SALES' };
 const REVIEWER: Actor = { id: 'reviewer-1', role: 'REVIEWER' };
+const OTHER_REVIEWER: Actor = { id: 'reviewer-2', role: 'REVIEWER' };
 const ADMIN: Actor = { id: 'admin-1', role: 'ADMIN' };
+
+const reviewers: ReviewerDirectory = {
+  isReviewer: (userId) => Promise.resolve([REVIEWER.id, OTHER_REVIEWER.id].includes(userId)),
+};
 
 // Fake data only.
 const input: ApplicationDetailsInput = {
@@ -66,6 +77,8 @@ describe('application command handlers', () => {
   let create: CreateApplicationHandler;
   let update: UpdateApplicationHandler;
   let submit: SubmitApplicationHandler;
+  let assign: AssignReviewerHandler;
+  let decide: RecordDecisionHandler;
 
   beforeEach(() => {
     uow = new FakeUnitOfWork();
@@ -73,6 +86,8 @@ describe('application command handlers', () => {
     create = new CreateApplicationHandler(uow, applications);
     update = new UpdateApplicationHandler(uow, applications);
     submit = new SubmitApplicationHandler(uow, applications);
+    assign = new AssignReviewerHandler(uow, applications, reviewers);
+    decide = new RecordDecisionHandler(uow, applications);
   });
 
   const createAs = async (actor: Actor) =>
@@ -188,6 +203,98 @@ describe('application command handlers', () => {
         InvalidStatusTransition,
       );
       expect(stored(id)?.submissionNo).toBe(1);
+    });
+  });
+
+  describe('assign reviewer', () => {
+    const submitted = async () => {
+      const id = await createAs(SALES_A);
+      await submit.execute(new SubmitApplicationCommand(SALES_A, id));
+      return id;
+    };
+
+    it('lets ADMIN assign a reviewer', async () => {
+      const id = await submitted();
+
+      await assign.execute(new AssignReviewerCommand(ADMIN, id, REVIEWER.id));
+
+      expect(stored(id)?.assignedReviewerId).toBe(REVIEWER.id);
+    });
+
+    it.each([
+      ['a SALES user', SALES_A.id],
+      ['an ADMIN', ADMIN.id],
+      ['an unknown user', '00000000-0000-4000-8000-000000000000'],
+    ])('refuses %s as the reviewer', async (_case, target) => {
+      const id = await submitted();
+
+      await expect(assign.execute(new AssignReviewerCommand(ADMIN, id, target))).rejects.toThrow(
+        InvalidReviewer,
+      );
+      expect(stored(id)?.assignedReviewerId).toBeNull();
+    });
+
+    it.each<[string, Actor, typeof ApplicationAccessDenied | typeof ApplicationNotFound]>([
+      ['the SALES owner', SALES_A, ApplicationAccessDenied],
+      ['another SALES user', SALES_B, ApplicationNotFound],
+      ['a REVIEWER assigning themselves', REVIEWER, ApplicationAccessDenied],
+    ])('refuses %s', async (_case, actor, error) => {
+      const id = await submitted();
+
+      await expect(
+        assign.execute(new AssignReviewerCommand(actor, id, REVIEWER.id)),
+      ).rejects.toThrow(error);
+      expect(stored(id)?.assignedReviewerId).toBeNull();
+    });
+
+    it('refuses a draft', async () => {
+      const id = await createAs(SALES_A);
+      await expect(
+        assign.execute(new AssignReviewerCommand(ADMIN, id, REVIEWER.id)),
+      ).rejects.toThrow(ApplicationNotAssignable);
+    });
+  });
+
+  describe('record decision', () => {
+    // Submitted, assigned to REVIEWER, risk result in (the worker's job, from E10).
+    const awaitingDecision = async () => {
+      const id = await createAs(SALES_A);
+      await submit.execute(new SubmitApplicationCommand(SALES_A, id));
+      await assign.execute(new AssignReviewerCommand(ADMIN, id, REVIEWER.id));
+      applications.rows.set(id, { ...stored(id)!, riskStatus: 'LOW' });
+      return id;
+    };
+
+    it('records the assigned reviewer’s decision', async () => {
+      const id = await awaitingDecision();
+
+      await decide.execute(new RecordDecisionCommand(REVIEWER, id, 'REJECT', 'MCC not supported'));
+
+      expect(stored(id)).toMatchObject({
+        status: 'REJECTED',
+        decisionReason: 'MCC not supported',
+      });
+    });
+
+    it.each<[string, Actor, typeof NotAssignedReviewer | typeof ApplicationNotFound]>([
+      ['a reviewer who is not assigned', OTHER_REVIEWER, NotAssignedReviewer],
+      ['ADMIN', ADMIN, NotAssignedReviewer],
+      ['the SALES owner', SALES_A, NotAssignedReviewer],
+      ['another SALES user', SALES_B, ApplicationNotFound],
+    ])('refuses %s and changes nothing', async (_case, actor, error) => {
+      const id = await awaitingDecision();
+
+      await expect(decide.execute(new RecordDecisionCommand(actor, id, 'APPROVE'))).rejects.toThrow(
+        error,
+      );
+      expect(stored(id)?.status).toBe('SUBMITTED');
+    });
+
+    it('answers not found to a reviewer for a draft', async () => {
+      const id = await createAs(SALES_A);
+      await expect(
+        decide.execute(new RecordDecisionCommand(REVIEWER, id, 'APPROVE')),
+      ).rejects.toThrow(ApplicationNotFound);
     });
   });
 });

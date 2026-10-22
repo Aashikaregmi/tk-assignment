@@ -47,6 +47,13 @@ export class ApplicationNotAssignable extends DomainError {
   }
 }
 
+// Unknown user and non-reviewer look the same.
+export class InvalidReviewer extends DomainError {
+  constructor() {
+    super('invalid', 'INVALID_REVIEWER', 'reviewerId must identify a user with the REVIEWER role');
+  }
+}
+
 export class NotAssignedReviewer extends DomainError {
   constructor() {
     super(

@@ -55,3 +55,9 @@ export function assertCanEdit(actor: Actor, application: AccessView): void {
   assertCanRead(actor, application);
   if (!canEdit(actor, application)) throw new ApplicationAccessDenied('edit');
 }
+
+// Assigning a reviewer. Deciding is the aggregate's rule: only the assigned reviewer.
+export function assertCanAssign(actor: Actor, application: AccessView): void {
+  assertCanRead(actor, application);
+  if (actor.role !== 'ADMIN') throw new ApplicationAccessDenied('assign reviewers to');
+}
