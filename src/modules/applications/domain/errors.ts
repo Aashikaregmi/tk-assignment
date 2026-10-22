@@ -1,5 +1,5 @@
 import { DomainError } from '@shared/domain/domain-error';
-import type { ApplicationStatus } from './application-status';
+import type { ApplicationStatus, Decision, RiskStatus } from './application-status';
 
 // Messages name the field, never the value: values may be personal data.
 export class InvalidApplicationData extends DomainError {
@@ -34,5 +34,35 @@ export class ApplicationNotFound extends DomainError {
 export class ApplicationAccessDenied extends DomainError {
   constructor(action: string) {
     super('forbidden', 'APPLICATION_ACCESS_DENIED', `Your role cannot ${action} applications`);
+  }
+}
+
+export class ApplicationNotAssignable extends DomainError {
+  constructor(status: ApplicationStatus) {
+    super(
+      'conflict',
+      'APPLICATION_NOT_ASSIGNABLE',
+      `An application in ${status} cannot be assigned a reviewer`,
+    );
+  }
+}
+
+export class NotAssignedReviewer extends DomainError {
+  constructor() {
+    super(
+      'forbidden',
+      'NOT_ASSIGNED_REVIEWER',
+      'Only the assigned reviewer can decide this application',
+    );
+  }
+}
+
+export class RiskResultRequired extends DomainError {
+  constructor(decision: Decision, riskStatus: RiskStatus) {
+    super(
+      'conflict',
+      'RISK_RESULT_REQUIRED',
+      `Cannot ${decision} while the risk status is ${riskStatus}`,
+    );
   }
 }

@@ -38,6 +38,7 @@ describe('TypeOrmApplicationRepository', () => {
   let uow: TypeOrmUnitOfWork;
   let repository: TypeOrmApplicationRepository;
   let salesId: string;
+  let reviewerId: string;
 
   beforeAll(async () => {
     db = await new DataSource(
@@ -56,6 +57,11 @@ describe('TypeOrmApplicationRepository', () => {
       [FAKE_HASH],
     );
     salesId = user!.id;
+    const [reviewer] = await db.query<{ id: string }[]>(
+      "INSERT INTO users (email, password_hash, role) VALUES ('reviewer.one@example.com', $1, 'REVIEWER') RETURNING id",
+      [FAKE_HASH],
+    );
+    reviewerId = reviewer!.id;
   });
 
   const newApplication = () => MerchantApplication.create(randomUUID(), salesId, details);
@@ -162,5 +168,51 @@ describe('TypeOrmApplicationRepository', () => {
     });
 
     await expect(save(forged)).rejects.toThrow(constraint);
+  });
+
+  describe('decisions at the database', () => {
+    // A valid rejection; each case below breaks exactly one rule.
+    const decided = (overrides: Partial<MerchantApplicationState>) =>
+      MerchantApplication.reconstitute({
+        ...newApplication().toState(),
+        status: 'REJECTED',
+        riskStatus: 'LOW',
+        submissionNo: 1,
+        assignedReviewerId: reviewerId,
+        decisionReason: 'MCC not supported',
+        ...overrides,
+      });
+
+    it('round-trips a decided application', async () => {
+      const application = decided({});
+
+      await save(application);
+
+      expect((await load(application.id))?.toState()).toEqual(application.toState());
+    });
+
+    it.each<[string, Partial<MerchantApplicationState>, RegExp]>([
+      ['a rejection without a reviewer', { assignedReviewerId: null }, /_decision_check/],
+      ['a rejection without a reason', { decisionReason: null }, /_decision_check/],
+      [
+        'an approval without a reviewer',
+        { status: 'APPROVED', assignedReviewerId: null },
+        /_decision_check/,
+      ],
+      [
+        'an approval without a risk result',
+        { status: 'APPROVED', riskStatus: 'FAILED' },
+        /_decision_check/,
+      ],
+      ['a reason on an undecided application', { status: 'SUBMITTED' }, /_decision_check/],
+      ['an empty reason', { decisionReason: '' }, /_decision_reason_check/],
+      [
+        'a reason over 1000 characters',
+        { decisionReason: 'x'.repeat(1001) },
+        /_decision_reason_check/,
+      ],
+    ])('rejects %s', async (_case, override, constraint) => {
+      await expect(save(decided(override))).rejects.toThrow(constraint);
+    });
   });
 });

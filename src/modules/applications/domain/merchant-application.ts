@@ -1,11 +1,22 @@
 import { AggregateRoot } from '@shared/domain/aggregate-root';
+import type { Actor } from '@shared/domain/role';
 import {
   ApplicationStatus,
   canTransition,
+  Decision,
+  DECISION_OUTCOMES,
   EDITABLE_STATUSES,
+  RISK_RESULTS,
   RiskStatus,
 } from './application-status';
-import { ApplicationNotEditable, InvalidApplicationData, InvalidStatusTransition } from './errors';
+import {
+  ApplicationNotAssignable,
+  ApplicationNotEditable,
+  InvalidApplicationData,
+  InvalidStatusTransition,
+  NotAssignedReviewer,
+  RiskResultRequired,
+} from './errors';
 import type { ApplicationEvent } from './events';
 import type { OwnerContact } from './owner-contact';
 import type { ProcessingInfo } from './processing-info';
@@ -35,6 +46,8 @@ export interface MerchantApplicationState extends ApplicationDetails {
   riskStatus: RiskStatus;
   assignedReviewerId: string | null;
   submissionNo: number;
+  // Why the current decision was made; null while undecided.
+  decisionReason: string | null;
 }
 
 export class MerchantApplication extends AggregateRoot<ApplicationEvent> {
@@ -52,6 +65,7 @@ export class MerchantApplication extends AggregateRoot<ApplicationEvent> {
       riskStatus: 'NOT_STARTED',
       assignedReviewerId: null,
       submissionNo: 0,
+      decisionReason: null,
     });
     application.record({ type: 'ApplicationCreated', aggregateId: id, createdBy });
     return application;
@@ -94,9 +108,11 @@ export class MerchantApplication extends AggregateRoot<ApplicationEvent> {
 
   // From DRAFT, or INFO_REQUESTED after edits. Starts a new risk review.
   submit(): void {
-    this.transitionTo('SUBMITTED');
+    this.assertCanMoveTo('SUBMITTED');
+    this.state.status = 'SUBMITTED';
     this.state.riskStatus = 'PENDING';
     this.state.submissionNo += 1;
+    this.state.decisionReason = null;
     this.record({
       type: 'ApplicationSubmitted',
       aggregateId: this.id,
@@ -104,11 +120,42 @@ export class MerchantApplication extends AggregateRoot<ApplicationEvent> {
     });
   }
 
-  private transitionTo(next: ApplicationStatus): void {
+  // Until decided, the reviewer can be replaced.
+  assignReviewer(reviewerId: string): void {
+    if (this.state.status !== 'SUBMITTED') throw new ApplicationNotAssignable(this.state.status);
+    if (this.state.assignedReviewerId === reviewerId) return;
+    this.state.assignedReviewerId = reviewerId;
+    this.record({ type: 'ReviewerAssigned', aggregateId: this.id, reviewerId });
+  }
+
+  // Only the assigned reviewer decides; ADMIN can't. Needs a finished risk review.
+  decide(actor: Actor, decision: Decision, reason?: string): void {
+    if (actor.role !== 'REVIEWER' || actor.id !== this.state.assignedReviewerId) {
+      throw new NotAssignedReviewer();
+    }
+    const next = DECISION_OUTCOMES[decision];
+    this.assertCanMoveTo(next);
+    // A failed review can be rejected or sent back (resubmitting reruns it), never approved.
+    const usable = decision === 'APPROVE' ? RISK_RESULTS : [...RISK_RESULTS, 'FAILED'];
+    if (!usable.includes(this.state.riskStatus)) {
+      throw new RiskResultRequired(decision, this.state.riskStatus);
+    }
+    const decisionReason = checkedReason(decision, reason);
+
+    this.state.status = next;
+    this.state.decisionReason = decisionReason;
+    this.record({
+      type: 'ApplicationDecided',
+      aggregateId: this.id,
+      decision,
+      reason: decisionReason,
+    });
+  }
+
+  private assertCanMoveTo(next: ApplicationStatus): void {
     if (!canTransition(this.state.status, next)) {
       throw new InvalidStatusTransition(this.state.status, next);
     }
-    this.state.status = next;
   }
 }
 
@@ -131,4 +178,15 @@ function checked(details: ApplicationDetails): ApplicationDetails {
     ownerContact: details.ownerContact,
     processingInfo: details.processingInfo,
   };
+}
+
+// Rejections and info requests must say why; a note on an approval is optional.
+function checkedReason(decision: Decision, reason: string | undefined): string | null {
+  const trimmed = reason?.trim() ?? '';
+  if (trimmed.length > 1000) {
+    throw new InvalidApplicationData('reason must be at most 1000 characters');
+  }
+  if (trimmed.length > 0) return trimmed;
+  if (decision === 'APPROVE') return null;
+  throw new InvalidApplicationData(`reason is required to ${decision}`);
 }

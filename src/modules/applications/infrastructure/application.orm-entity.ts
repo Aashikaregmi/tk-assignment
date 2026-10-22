@@ -64,6 +64,9 @@ export class ApplicationOrmEntity {
   @Column('integer', { name: 'submission_no' })
   submissionNo!: number;
 
+  @Column('text', { name: 'decision_reason', nullable: true })
+  decisionReason!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
