@@ -6,6 +6,7 @@ import { DatabaseConfig, loadConfig } from '@shared/infrastructure/config/app-co
 import { dataSourceOptions } from '@shared/infrastructure/database/data-source';
 import { TypeOrmUnitOfWork } from '@shared/infrastructure/database/typeorm-unit-of-work';
 import { DataSource } from 'typeorm';
+import { resetDatabase } from './reset-database';
 import { testEnv } from './test-env';
 
 // Well-formed but not a hash of anything.
@@ -24,7 +25,7 @@ describe('UsersService', () => {
 
   afterAll(() => db.destroy());
 
-  beforeEach(() => db.query('DELETE FROM users'));
+  beforeEach(() => resetDatabase());
 
   const save = (user: Partial<UserOrmEntity> = {}) =>
     db.getRepository(UserOrmEntity).save({

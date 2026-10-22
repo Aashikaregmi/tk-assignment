@@ -4,6 +4,7 @@ import { SEED_USERS, seedUsers } from '@modules/identity/seed-users';
 import { DatabaseConfig, loadConfig } from '@shared/infrastructure/config/app-config';
 import { dataSourceOptions } from '@shared/infrastructure/database/data-source';
 import { DataSource } from 'typeorm';
+import { resetDatabase } from './reset-database';
 import { testEnv } from './test-env';
 
 describe('seedUsers', () => {
@@ -17,7 +18,7 @@ describe('seedUsers', () => {
 
   afterAll(() => db.destroy());
 
-  beforeEach(() => db.query('DELETE FROM users'));
+  beforeEach(() => resetDatabase());
 
   it('seeds only fake example.com users', () => {
     expect(SEED_USERS.map(({ role }) => role).sort()).toEqual([
