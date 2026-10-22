@@ -1,4 +1,4 @@
-import { loadConfig } from '@shared/infrastructure/config/app-config';
+import { DatabaseConfig, loadConfig } from '@shared/infrastructure/config/app-config';
 import { dataSourceOptions } from '@shared/infrastructure/database/data-source';
 import { DataSource } from 'typeorm';
 import { testEnv } from './test-env';
@@ -7,7 +7,9 @@ describe('app database role', () => {
   let db: DataSource;
 
   beforeAll(async () => {
-    db = await new DataSource(dataSourceOptions(loadConfig(testEnv()))).initialize();
+    db = await new DataSource(
+      dataSourceOptions(loadConfig(DatabaseConfig, testEnv())),
+    ).initialize();
   });
 
   afterAll(() => db.destroy());
