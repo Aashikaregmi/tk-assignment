@@ -23,3 +23,16 @@ export class ApplicationNotEditable extends DomainError {
     super('conflict', 'APPLICATION_NOT_EDITABLE', `An application in ${status} cannot be edited`);
   }
 }
+
+// Also used for applications the actor may not see, so their existence isn't revealed.
+export class ApplicationNotFound extends DomainError {
+  constructor() {
+    super('not_found', 'APPLICATION_NOT_FOUND', 'Application not found');
+  }
+}
+
+export class ApplicationAccessDenied extends DomainError {
+  constructor(action: string) {
+    super('forbidden', 'APPLICATION_ACCESS_DENIED', `Your role cannot ${action} this application`);
+  }
+}
