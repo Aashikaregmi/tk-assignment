@@ -21,7 +21,7 @@ class TestController {
 
 function contextFor(handler: keyof TestController, request: Partial<AuthenticatedRequest>) {
   return {
-    getHandler: () => (TestController.prototype as Record<string, unknown>)[handler],
+    getHandler: () => (TestController.prototype as unknown as Record<string, unknown>)[handler],
     getClass: () => TestController,
     switchToHttp: () => ({ getRequest: () => request }),
   } as unknown as ExecutionContext;
