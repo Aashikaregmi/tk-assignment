@@ -21,7 +21,7 @@ import {
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
-import { CurrentUser, Roles } from '@modules/identity';
+import { CurrentUser, Roles } from '@shared/api/auth.decorators';
 import type { Actor } from '@shared/domain/role';
 import { GetApplicationQuery, ListApplicationsQuery } from '../application/application-queries';
 import { AssignReviewerCommand } from '../application/assign-reviewer';

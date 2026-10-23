@@ -2,6 +2,7 @@ import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/com
 import type { Request } from 'express';
 import type { Actor, Role } from '@shared/domain/role';
 
+// Shared, not in identity: every module's controllers use them, and identity's guards read them.
 export const IS_PUBLIC_KEY = 'isPublic';
 export const ROLES_KEY = 'roles';
 

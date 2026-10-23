@@ -6,7 +6,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import { Public } from './auth.decorators';
+import { Public } from '@shared/api/auth.decorators';
 import { AuthService } from './auth.service';
 import { AccessTokenDto, LoginDto } from './login.dto';
 

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { CurrentUser, Roles } from '@modules/identity';
+import { CurrentUser, Roles } from '@shared/api/auth.decorators';
 import { AccessTokenDto } from '@modules/identity/login.dto';
 import { seedUsers } from '@modules/identity/seed-users';
 import type { Actor } from '@shared/domain/role';
