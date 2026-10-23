@@ -24,14 +24,18 @@ import {
 import { CurrentUser, Roles } from '@modules/identity';
 import type { Actor } from '@shared/domain/role';
 import { GetApplicationQuery, ListApplicationsQuery } from '../application/application-queries';
+import { AssignReviewerCommand } from '../application/assign-reviewer';
 import { CreateApplicationCommand } from '../application/create-application';
+import { RecordDecisionCommand } from '../application/record-decision';
 import { SubmitApplicationCommand } from '../application/submit-application';
 import { UpdateApplicationCommand } from '../application/update-application';
 import {
   ApplicationPageResponse,
   ApplicationResponse,
+  AssignReviewerDto,
   CreateApplicationDto,
   ListApplicationsDto,
+  RecordDecisionDto,
   UpdateApplicationDto,
 } from './applications.dto';
 
@@ -105,6 +109,40 @@ export class ApplicationsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ApplicationResponse> {
     await this.commands.execute(new SubmitApplicationCommand(actor, id));
+    return this.queries.execute(new GetApplicationQuery(actor, id));
+  }
+
+  // Replaces any current reviewer, until a decision is made.
+  @Post(':id/assignment')
+  @HttpCode(HttpStatus.OK)
+  @Roles('ADMIN')
+  @ApiOkResponse({ type: ApplicationResponse })
+  @ApiNotFoundResponse({ description: 'Missing' })
+  @ApiConflictResponse({ description: 'Not in SUBMITTED' })
+  @ApiUnprocessableEntityResponse({ description: 'Target is not a reviewer' })
+  async assign(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() { reviewerId }: AssignReviewerDto,
+  ): Promise<ApplicationResponse> {
+    await this.commands.execute(new AssignReviewerCommand(actor, id, reviewerId));
+    return this.queries.execute(new GetApplicationQuery(actor, id));
+  }
+
+  @Post(':id/decision')
+  @HttpCode(HttpStatus.OK)
+  @Roles('REVIEWER')
+  @ApiOkResponse({ type: ApplicationResponse })
+  @ApiForbiddenResponse({ description: 'Not the assigned reviewer' })
+  @ApiNotFoundResponse({ description: 'Missing, or not visible to you' })
+  @ApiConflictResponse({ description: 'Not in SUBMITTED, or risk review not finished' })
+  @ApiUnprocessableEntityResponse({ description: 'Reason missing or too long' })
+  async decide(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() { decision, reason }: RecordDecisionDto,
+  ): Promise<ApplicationResponse> {
+    await this.commands.execute(new RecordDecisionCommand(actor, id, decision, reason));
     return this.queries.execute(new GetApplicationQuery(actor, id));
   }
 }

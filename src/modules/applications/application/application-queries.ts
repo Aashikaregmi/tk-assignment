@@ -18,6 +18,7 @@ export interface ApplicationView {
   riskStatus: RiskStatus;
   createdBy: string;
   assignedReviewerId: string | null;
+  decisionReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

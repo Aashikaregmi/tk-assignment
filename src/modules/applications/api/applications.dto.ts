@@ -6,13 +6,14 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { MAX_PAGE_SIZE } from '../application/application-queries';
-import { APPLICATION_STATUSES, RISK_STATUSES } from '../domain/application-status';
-import type { ApplicationStatus, RiskStatus } from '../domain/application-status';
+import { APPLICATION_STATUSES, DECISIONS, RISK_STATUSES } from '../domain/application-status';
+import type { ApplicationStatus, Decision, RiskStatus } from '../domain/application-status';
 import { BUSINESS_TYPES } from '../domain/merchant-application';
 import type { BusinessType } from '../domain/merchant-application';
 
@@ -74,6 +75,27 @@ export class CreateApplicationDto {
 // Every field optional; nested objects are replaced whole.
 export class UpdateApplicationDto extends PartialType(CreateApplicationDto) {}
 
+export class AssignReviewerDto {
+  @ApiProperty({ format: 'uuid', description: 'A user with the REVIEWER role' })
+  @IsUUID()
+  reviewerId!: string;
+}
+
+export class RecordDecisionDto {
+  @ApiProperty({ enum: DECISIONS })
+  @IsIn(DECISIONS)
+  decision!: Decision;
+
+  @ApiProperty({
+    required: false,
+    description: 'Required unless APPROVE; at most 1000 characters',
+    example: 'Please confirm the monthly volume',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 export class ListApplicationsDto {
   @ApiProperty({ enum: APPLICATION_STATUSES, required: false })
   @IsOptional()
@@ -113,6 +135,9 @@ export class ApplicationResponse {
 
   @ApiProperty({ type: String, nullable: true })
   assignedReviewerId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: 'Why the current decision was made' })
+  decisionReason!: string | null;
 
   createdAt!: Date;
   updatedAt!: Date;

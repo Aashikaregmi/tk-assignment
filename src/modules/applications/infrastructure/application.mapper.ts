@@ -26,6 +26,7 @@ export function toDomain(row: ApplicationOrmEntity): MerchantApplication {
     riskStatus: row.riskStatus,
     assignedReviewerId: row.assignedReviewerId,
     submissionNo: row.submissionNo,
+    decisionReason: row.decisionReason,
   });
 }
 
