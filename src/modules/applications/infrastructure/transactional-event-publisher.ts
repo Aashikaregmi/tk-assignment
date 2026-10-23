@@ -3,8 +3,7 @@ import { AuditWriter } from '@modules/audit';
 import { OutboxWriter } from '@modules/outbox';
 import { DomainEventPublisher } from '../application/domain-event-publisher';
 import type { ApplicationEvent } from '../domain/events';
-
-const RISK_REVIEW_QUEUE = 'risk-review';
+import { RISK_REVIEW_QUEUE, RiskReviewJob } from './risk-review-queue';
 
 // Every event goes to the audit log; a submission also queues its risk review through the outbox.
 // Both writes join the command's transaction.
@@ -26,11 +25,8 @@ export class TransactionalEventPublisher implements DomainEventPublisher {
         metadata,
       });
       if (event.type === 'ApplicationSubmitted') {
-        await this.outbox.write({
-          queue: RISK_REVIEW_QUEUE,
-          type,
-          payload: { applicationId: aggregateId, submissionNo: event.submissionNo },
-        });
+        const job: RiskReviewJob = { applicationId: aggregateId, submissionNo: event.submissionNo };
+        await this.outbox.write({ queue: RISK_REVIEW_QUEUE, type, payload: { ...job } });
       }
     }
   }

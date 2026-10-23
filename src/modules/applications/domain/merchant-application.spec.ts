@@ -1,5 +1,5 @@
 import type { Actor } from '@shared/domain/role';
-import { ApplicationStatus, Decision, RiskStatus } from './application-status';
+import { ApplicationStatus, Decision, RISK_RESULTS, RiskStatus } from './application-status';
 import {
   ApplicationNotAssignable,
   ApplicationNotEditable,
@@ -333,6 +333,66 @@ describe('MerchantApplication', () => {
         assignedReviewerId: REVIEWER.id,
         decisionReason: null,
       });
+    });
+  });
+
+  describe('risk review', () => {
+    // Second submission, review pending.
+    const pending = () => stored({ status: 'SUBMITTED', riskStatus: 'PENDING', submissionNo: 2 });
+
+    it.each(RISK_RESULTS)('records %s for the current submission', (result) => {
+      const application = pending();
+
+      application.recordRiskResult(2, result);
+
+      expect(application.toState().riskStatus).toBe(result);
+      expect(application.pullEvents()).toEqual([
+        { type: 'RiskReviewCompleted', aggregateId: APP_ID, submissionNo: 2, result },
+      ]);
+    });
+
+    it('marks the current submission’s review as failed', () => {
+      const application = pending();
+
+      application.markRiskFailed(2);
+
+      expect(application.toState().riskStatus).toBe('FAILED');
+      expect(application.pullEvents()).toEqual([
+        { type: 'RiskReviewFailed', aggregateId: APP_ID, submissionNo: 2 },
+      ]);
+    });
+
+    it.each<[string, Partial<MerchantApplicationState>, number]>([
+      ['an older submission', { riskStatus: 'PENDING' }, 1],
+      ['a repeated delivery after the result', { riskStatus: 'LOW' }, 2],
+      ['a delivery after the review failed', { riskStatus: 'FAILED' }, 2],
+      ['a delivery after a decision', { status: 'INFO_REQUESTED', riskStatus: 'MEDIUM' }, 2],
+    ])('ignores a result or failure for %s', (_case, overrides, submissionNo) => {
+      const actions = [
+        (application: MerchantApplication) => application.recordRiskResult(submissionNo, 'HIGH'),
+        (application: MerchantApplication) => application.markRiskFailed(submissionNo),
+      ];
+      for (const act of actions) {
+        const application = stored({ status: 'SUBMITTED', submissionNo: 2, ...overrides });
+        const before = application.toState();
+
+        act(application);
+
+        expect(application.toState()).toEqual(before);
+        expect(application.pullEvents()).toEqual([]);
+      }
+    });
+
+    it('after a resubmission, only the new submission’s result counts', () => {
+      const application = awaitingDecision();
+      application.decide(REVIEWER, 'REQUEST_INFO', 'Please confirm the volume');
+      application.submit();
+
+      application.recordRiskResult(1, 'LOW');
+      expect(application.toState().riskStatus).toBe('PENDING');
+
+      application.recordRiskResult(2, 'HIGH');
+      expect(application.toState().riskStatus).toBe('HIGH');
     });
   });
 

@@ -9,12 +9,13 @@ import { testEnv } from './test-env';
 
 // The real AppModule (global pipe, filter and guards) against the test database.
 export async function createTestApp(
-  options: { controllers?: Type[]; throttleLogin?: boolean } = {},
+  options: { controllers?: Type[]; throttleLogin?: boolean; env?: Record<string, string> } = {},
 ): Promise<INestApplication<App>> {
   const config = loadConfig(AppConfig, {
     ...testEnv(),
     JWT_SECRET: randomBytes(32).toString('hex'),
     LOG_LEVEL: 'silent',
+    ...options.env,
   });
 
   let builder = Test.createTestingModule({

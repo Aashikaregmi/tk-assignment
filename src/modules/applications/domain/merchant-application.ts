@@ -7,6 +7,7 @@ import {
   DECISION_OUTCOMES,
   EDITABLE_STATUSES,
   RISK_RESULTS,
+  RiskResult,
   RiskStatus,
 } from './application-status';
 import {
@@ -136,7 +137,8 @@ export class MerchantApplication extends AggregateRoot<ApplicationEvent> {
     const next = DECISION_OUTCOMES[decision];
     this.assertCanMoveTo(next);
     // A failed review can be rejected or sent back (resubmitting reruns it), never approved.
-    const usable = decision === 'APPROVE' ? RISK_RESULTS : [...RISK_RESULTS, 'FAILED'];
+    const usable: readonly RiskStatus[] =
+      decision === 'APPROVE' ? RISK_RESULTS : [...RISK_RESULTS, 'FAILED'];
     if (!usable.includes(this.state.riskStatus)) {
       throw new RiskResultRequired(decision, this.state.riskStatus);
     }
@@ -150,6 +152,25 @@ export class MerchantApplication extends AggregateRoot<ApplicationEvent> {
       decision,
       reason: decisionReason,
     });
+  }
+
+  // From the risk worker. Applies only to the current submission while its review is pending, so a
+  // result for an older submission (resubmitted since) or a repeated delivery changes nothing.
+  recordRiskResult(submissionNo: number, result: RiskResult): void {
+    if (!this.awaitsRiskReview(submissionNo)) return;
+    this.state.riskStatus = result;
+    this.record({ type: 'RiskReviewCompleted', aggregateId: this.id, submissionNo, result });
+  }
+
+  // Retries exhausted. A failed review can still be rejected or sent back, never approved.
+  markRiskFailed(submissionNo: number): void {
+    if (!this.awaitsRiskReview(submissionNo)) return;
+    this.state.riskStatus = 'FAILED';
+    this.record({ type: 'RiskReviewFailed', aggregateId: this.id, submissionNo });
+  }
+
+  awaitsRiskReview(submissionNo: number): boolean {
+    return submissionNo === this.state.submissionNo && this.state.riskStatus === 'PENDING';
   }
 
   private assertCanMoveTo(next: ApplicationStatus): void {

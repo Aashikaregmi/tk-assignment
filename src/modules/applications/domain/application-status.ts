@@ -9,7 +9,8 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 export const RISK_STATUSES = ['NOT_STARTED', 'PENDING', 'LOW', 'MEDIUM', 'HIGH', 'FAILED'] as const;
 export type RiskStatus = (typeof RISK_STATUSES)[number];
-export const RISK_RESULTS: readonly RiskStatus[] = ['LOW', 'MEDIUM', 'HIGH'];
+export const RISK_RESULTS = ['LOW', 'MEDIUM', 'HIGH'] as const;
+export type RiskResult = (typeof RISK_RESULTS)[number];
 
 // Every allowed move; anything not listed is rejected. APPROVED and REJECTED are final.
 const TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]> = {
