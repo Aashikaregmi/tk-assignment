@@ -10,7 +10,7 @@ export class Queues implements OnApplicationShutdown {
   private readonly jobDefaults = new Map<string, DefaultJobOptions>();
 
   constructor(config: AppConfig) {
-    this.connection = { host: config.REDIS_HOST, port: config.REDIS_PORT };
+    this.connection = { host: config.REDIS_HOST, port: config.REDIS_PORT, db: config.REDIS_DB };
   }
 
   // Retries and retention for jobs added to a queue, set by the module that consumes it.

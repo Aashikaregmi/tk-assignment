@@ -62,6 +62,13 @@ export class AppConfig extends DatabaseConfig {
   @Max(65535)
   REDIS_PORT: number = 6379;
 
+  // Logical database: tests use their own, so a dev worker never takes their jobs.
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(15)
+  REDIS_DB: number = 0;
+
   // Simulated risk provider: fail the first N calls for each submission (retry demos and tests).
   @Type(() => Number)
   @IsInt()
