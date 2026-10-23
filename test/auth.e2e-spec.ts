@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { CurrentUser, Roles } from '@shared/api/auth.decorators';
-import { AccessTokenDto } from '@modules/identity/login.dto';
+import { TokensResponse } from '@modules/identity/login.dto';
 import { seedUsers } from '@modules/identity/seed-users';
 import type { Actor } from '@shared/domain/role';
 import request from 'supertest';
@@ -46,7 +46,7 @@ describe('auth (e2e)', () => {
 
   async function tokenFor(email: string): Promise<string> {
     const response = await login(email).expect(200);
-    return (response.body as AccessTokenDto).accessToken;
+    return (response.body as TokensResponse).accessToken;
   }
 
   describe('POST /auth/login', () => {
@@ -57,6 +57,8 @@ describe('auth (e2e)', () => {
         accessToken: expect.any(String) as string,
         tokenType: 'Bearer',
         expiresIn: 900,
+        refreshToken: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) as string,
+        refreshExpiresIn: 604800,
       });
     });
 
@@ -139,6 +141,74 @@ describe('auth (e2e)', () => {
     it('returns 403 on a route that declares no roles, even for ADMIN', async () => {
       const token = await tokenFor('admin@example.com');
       await http().get('/e2e-probe/undeclared').auth(token, { type: 'bearer' }).expect(403);
+    });
+  });
+
+  describe('refresh tokens', () => {
+    const tokensFor = async (email: string) =>
+      (await login(email).expect(200)).body as TokensResponse;
+    const refresh = (refreshToken: unknown) => http().post('/auth/refresh').send({ refreshToken });
+    const asAdmin = (accessToken: string) =>
+      http().get('/e2e-probe/admin').auth(accessToken, { type: 'bearer' });
+
+    it('refresh returns a new working access token and a new refresh token', async () => {
+      const first = await tokensFor('admin@example.com');
+
+      const response = await refresh(first.refreshToken).expect(200);
+
+      const next = response.body as TokensResponse;
+      expect(next).toMatchObject({ tokenType: 'Bearer', expiresIn: 900 });
+      expect(next.refreshToken).not.toBe(first.refreshToken);
+      await asAdmin(next.accessToken).expect(200);
+      await refresh(next.refreshToken).expect(200);
+    });
+
+    it('a reused refresh token is refused and ends the session, like an unknown one', async () => {
+      const first = await tokensFor('admin@example.com');
+      const { refreshToken: second } = (await refresh(first.refreshToken).expect(200))
+        .body as TokensResponse;
+
+      const reused = await refresh(first.refreshToken).expect(401);
+
+      await refresh(second).expect(401);
+      const unknown = await refresh('not-a-token-we-issued').expect(401);
+      expect(reused.body).toEqual(unknown.body);
+      expect(reused.body).toMatchObject({ detail: 'Invalid refresh token' });
+    });
+
+    it('logout ends the session; unknown tokens are accepted too', async () => {
+      const { refreshToken } = await tokensFor('admin@example.com');
+
+      await http().post('/auth/logout').send({ refreshToken }).expect(204);
+      await http().post('/auth/logout').send({ refreshToken: 'not-a-token-we-issued' }).expect(204);
+
+      await refresh(refreshToken).expect(401);
+    });
+
+    it('a role change applies at the next refresh', async () => {
+      const db = app.get(DataSource);
+      const { refreshToken, accessToken } = await tokensFor('admin@example.com');
+      await asAdmin(accessToken).expect(200);
+      try {
+        await db.query("UPDATE users SET role = 'SALES' WHERE email = 'admin@example.com'");
+
+        const demoted = (await refresh(refreshToken).expect(200)).body as TokensResponse;
+
+        await asAdmin(demoted.accessToken).expect(403);
+      } finally {
+        await db.query("UPDATE users SET role = 'ADMIN' WHERE email = 'admin@example.com'");
+      }
+    });
+
+    it.each([
+      ['a missing token', {}],
+      ['a blank token', { refreshToken: '' }],
+      ['a non-string token', { refreshToken: 42 }],
+      ['an oversized token', { refreshToken: 'x'.repeat(101) }],
+      ['an unknown field', { refreshToken: 'abc', userId: 'x' }],
+    ])('rejects %s with 400', async (_case, body) => {
+      await http().post('/auth/refresh').send(body).expect(400);
+      await http().post('/auth/logout').send(body).expect(400);
     });
   });
 });

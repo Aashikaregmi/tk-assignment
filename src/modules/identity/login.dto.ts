@@ -11,8 +11,19 @@ export class LoginDto {
   password!: string;
 }
 
-export class AccessTokenDto {
+export class RefreshTokenDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  refreshToken!: string;
+}
+
+export class TokensResponse {
   accessToken!: string;
   tokenType!: 'Bearer';
+  // Seconds until the access token expires.
   expiresIn!: number;
+  // Single use: each refresh returns a new one.
+  refreshToken!: string;
+  refreshExpiresIn!: number;
 }
