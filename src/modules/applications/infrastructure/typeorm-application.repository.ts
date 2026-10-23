@@ -9,6 +9,11 @@ import { ApplicationOrmEntity } from './application.orm-entity';
 export class TypeOrmApplicationRepository implements ApplicationRepository {
   constructor(private readonly uow: TypeOrmUnitOfWork) {}
 
+  async findById(id: string): Promise<MerchantApplication | null> {
+    const row = await this.uow.manager.findOneBy(ApplicationOrmEntity, { id });
+    return row ? toDomain(row) : null;
+  }
+
   // SELECT … FOR UPDATE. TypeORM throws if there's no transaction, so a lock can't silently vanish.
   async findByIdForUpdate(id: string): Promise<MerchantApplication | null> {
     const row = await this.uow.manager.findOne(ApplicationOrmEntity, {

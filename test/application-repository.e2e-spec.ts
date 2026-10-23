@@ -95,6 +95,14 @@ describe('TypeOrmApplicationRepository', () => {
     expect(timestamps?.updated_after_create).toBe(true);
   });
 
+  it('reads without a transaction or a lock', async () => {
+    const application = newApplication();
+    await save(application);
+
+    expect((await repository.findById(application.id))?.toState()).toEqual(application.toState());
+    await expect(repository.findById(randomUUID())).resolves.toBeNull();
+  });
+
   it('returns null for an unknown id', async () => {
     await expect(load(randomUUID())).resolves.toBeNull();
   });

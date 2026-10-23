@@ -169,7 +169,7 @@ export class MerchantApplication extends AggregateRoot<ApplicationEvent> {
     this.record({ type: 'RiskReviewFailed', aggregateId: this.id, submissionNo });
   }
 
-  private awaitsRiskReview(submissionNo: number): boolean {
+  awaitsRiskReview(submissionNo: number): boolean {
     return submissionNo === this.state.submissionNo && this.state.riskStatus === 'PENDING';
   }
 

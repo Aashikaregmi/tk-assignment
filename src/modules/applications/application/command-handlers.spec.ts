@@ -17,8 +17,10 @@ import { ApplicationRepository } from './application-repository';
 import { AssignReviewerCommand, AssignReviewerHandler } from './assign-reviewer';
 import { CreateApplicationCommand, CreateApplicationHandler } from './create-application';
 import { DomainEventPublisher } from './domain-event-publisher';
+import { ProcessRiskReviewCommand, ProcessRiskReviewHandler } from './process-risk-review';
 import { RecordDecisionCommand, RecordDecisionHandler } from './record-decision';
 import { ReviewerDirectory } from './reviewer-directory';
+import { RiskAssessmentRequest, RiskProvider } from './risk-provider';
 import { SubmitApplicationCommand, SubmitApplicationHandler } from './submit-application';
 import { UpdateApplicationCommand, UpdateApplicationHandler } from './update-application';
 
@@ -40,6 +42,11 @@ class InMemoryApplications implements ApplicationRepository {
   readonly rows = new Map<string, MerchantApplicationState>();
 
   constructor(private readonly uow: FakeUnitOfWork) {}
+
+  findById(id: string): Promise<MerchantApplication | null> {
+    const row = this.rows.get(id);
+    return Promise.resolve(row ? MerchantApplication.reconstitute(row) : null);
+  }
 
   findByIdForUpdate(id: string): Promise<MerchantApplication | null> {
     if (!this.uow.active) throw new Error('row lock taken outside a unit of work');
@@ -64,6 +71,22 @@ class RecordingPublisher implements DomainEventPublisher {
     if (!this.uow.active) throw new Error('publish outside a unit of work');
     this.published.push(...events.map(({ type }) => ({ actorId, type })));
     return Promise.resolve();
+  }
+}
+
+// Refuses to run inside a unit of work: no row lock may be held while a third party responds.
+class FakeRiskProvider implements RiskProvider {
+  readonly calls: { request: RiskAssessmentRequest; key: string }[] = [];
+  // Runs during the call, to simulate something happening meanwhile.
+  duringCall = () => {};
+
+  constructor(private readonly uow: FakeUnitOfWork) {}
+
+  assess(request: RiskAssessmentRequest, key: string) {
+    if (this.uow.active) throw new Error('provider called inside a unit of work');
+    this.calls.push({ request, key });
+    this.duringCall();
+    return Promise.resolve({ result: 'MEDIUM' as const, score: 55 });
   }
 }
 
@@ -344,6 +367,81 @@ describe('application command handlers', () => {
         ApplicationNotFound,
       );
 
+      expect(events.published).toEqual([]);
+    });
+  });
+
+  describe('process risk review', () => {
+    let provider: FakeRiskProvider;
+    let review: ProcessRiskReviewHandler;
+
+    beforeEach(() => {
+      provider = new FakeRiskProvider(uow);
+      review = new ProcessRiskReviewHandler(uow, applications, provider, events);
+    });
+
+    const submitted = async () => {
+      const id = await createAs(SALES_A);
+      await submit.execute(new SubmitApplicationCommand(SALES_A, id));
+      events.published.length = 0;
+      return id;
+    };
+
+    it('asks the provider once, outside the transaction, and records its result as the system', async () => {
+      const id = await submitted();
+
+      await review.execute(new ProcessRiskReviewCommand(id, 1));
+
+      expect(provider.calls).toEqual([
+        {
+          key: `${id}:1`,
+          request: {
+            legalBusinessName: 'Example Coffee LLC',
+            businessType: 'LLC',
+            monthlyVolumeCents: 2_500_000,
+            averageTicketCents: 4_500,
+            mcc: '5812',
+          },
+        },
+      ]);
+      expect(stored(id)?.riskStatus).toBe('MEDIUM');
+      expect(events.published).toEqual([{ actorId: null, type: 'RiskReviewCompleted' }]);
+    });
+
+    it('a duplicate delivery changes nothing and does not call the provider again', async () => {
+      const id = await submitted();
+      await review.execute(new ProcessRiskReviewCommand(id, 1));
+
+      await review.execute(new ProcessRiskReviewCommand(id, 1));
+
+      expect(provider.calls).toHaveLength(1);
+      expect(events.published).toHaveLength(1);
+    });
+
+    it('a job for an older submission is skipped without calling the provider', async () => {
+      const id = await submitted();
+      applications.rows.set(id, { ...stored(id)!, submissionNo: 2 });
+
+      await review.execute(new ProcessRiskReviewCommand(id, 1));
+
+      expect(provider.calls).toHaveLength(0);
+      expect(stored(id)?.riskStatus).toBe('PENDING');
+    });
+
+    it('a job for an unknown application is skipped', async () => {
+      await expect(
+        review.execute(new ProcessRiskReviewCommand('00000000-0000-4000-8000-000000000000', 1)),
+      ).resolves.toBeUndefined();
+      expect(provider.calls).toHaveLength(0);
+    });
+
+    it('drops the result if the application was resubmitted during the provider call', async () => {
+      const id = await submitted();
+      provider.duringCall = () => applications.rows.set(id, { ...stored(id)!, submissionNo: 2 });
+
+      await review.execute(new ProcessRiskReviewCommand(id, 1));
+
+      expect(stored(id)).toMatchObject({ riskStatus: 'PENDING', submissionNo: 2 });
       expect(events.published).toEqual([]);
     });
   });
