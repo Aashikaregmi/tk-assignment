@@ -11,9 +11,10 @@ import {
   UpdateApplicationCommand,
   UpdateApplicationHandler,
 } from '@modules/applications/application/update-application';
-import { AuditEventPublisher } from '@modules/applications/infrastructure/audit-event-publisher';
+import { TransactionalEventPublisher } from '@modules/applications/infrastructure/transactional-event-publisher';
 import { TypeOrmApplicationRepository } from '@modules/applications/infrastructure/typeorm-application.repository';
 import { AuditWriter } from '@modules/audit';
+import { OutboxWriter } from '@modules/outbox';
 import { DatabaseConfig, loadConfig } from '@shared/infrastructure/config/app-config';
 import { dataSourceOptions } from '@shared/infrastructure/database/data-source';
 import { TypeOrmUnitOfWork } from '@shared/infrastructure/database/typeorm-unit-of-work';
@@ -33,11 +34,11 @@ const input = {
   processingInfo: { monthlyVolumeCents: 2_500_000, averageTicketCents: 4_500, mcc: '5812' },
 };
 
-describe('application commands write the audit trail in their transaction', () => {
+describe('application commands write audit and outbox rows in their transaction', () => {
   let db: DataSource;
   let uow: TypeOrmUnitOfWork;
   let repository: TypeOrmApplicationRepository;
-  let publisher: AuditEventPublisher;
+  let publisher: TransactionalEventPublisher;
   let sales: Actor;
 
   beforeAll(async () => {
@@ -46,7 +47,7 @@ describe('application commands write the audit trail in their transaction', () =
     ).initialize();
     uow = new TypeOrmUnitOfWork(db);
     repository = new TypeOrmApplicationRepository(uow);
-    publisher = new AuditEventPublisher(new AuditWriter(uow));
+    publisher = new TransactionalEventPublisher(new AuditWriter(uow), new OutboxWriter(uow));
   });
 
   afterAll(() => db.destroy());
@@ -68,6 +69,10 @@ describe('application commands write the audit trail in their transaction', () =
     db.query<{ actor_id: string; action: string; entity_id: string; metadata: unknown }[]>(
       'SELECT actor_id, action, entity_id, metadata FROM audit_log ORDER BY id',
     );
+  const outboxRows = () =>
+    db.query<{ queue: string; type: string; payload: unknown; published_at: Date | null }[]>(
+      'SELECT queue, type, payload, published_at FROM outbox ORDER BY created_at',
+    );
   const status = async (id: string) =>
     (
       await db.query<{ status: string }[]>(
@@ -76,7 +81,7 @@ describe('application commands write the audit trail in their transaction', () =
       )
     )[0]?.status;
 
-  it('writes one row per event, in order, with the acting user', async () => {
+  it('writes one audit row per event, in order, with the acting user', async () => {
     const { id } = await create();
     await new UpdateApplicationHandler(uow, repository, publisher).execute(
       new UpdateApplicationCommand(sales, id, { businessName: 'Example Roasters' }),
@@ -107,22 +112,44 @@ describe('application commands write the audit trail in their transaction', () =
     ]);
   });
 
-  it('a command that fails after writing its audit row leaves neither the row nor the change', async () => {
+  it('queues a risk review for each submission, and nothing else', async () => {
     const { id } = await create();
-    const failsAfterAudit: DomainEventPublisher = {
+    await new UpdateApplicationHandler(uow, repository, publisher).execute(
+      new UpdateApplicationCommand(sales, id, { businessName: 'Example Roasters' }),
+    );
+    expect(await outboxRows()).toEqual([]);
+
+    await new SubmitApplicationHandler(uow, repository, publisher).execute(
+      new SubmitApplicationCommand(sales, id),
+    );
+
+    expect(await outboxRows()).toEqual([
+      {
+        queue: 'risk-review',
+        type: 'ApplicationSubmitted',
+        payload: { applicationId: id, submissionNo: 1 },
+        published_at: null,
+      },
+    ]);
+  });
+
+  it('a command that fails after its writes leaves no audit row, no outbox row and no change', async () => {
+    const { id } = await create();
+    const failsAfterWrites: DomainEventPublisher = {
       publish: async (actorId, events) => {
         await publisher.publish(actorId, events);
-        throw new Error('the transaction fails after the audit write');
+        throw new Error('the transaction fails after the writes');
       },
     };
 
     await expect(
-      new SubmitApplicationHandler(uow, repository, failsAfterAudit).execute(
+      new SubmitApplicationHandler(uow, repository, failsAfterWrites).execute(
         new SubmitApplicationCommand(sales, id),
       ),
-    ).rejects.toThrow('the transaction fails after the audit write');
+    ).rejects.toThrow('the transaction fails after the writes');
 
     expect(await status(id)).toBe('DRAFT');
     expect((await auditRows()).map(({ action }) => action)).toEqual(['ApplicationCreated']);
+    expect(await outboxRows()).toEqual([]);
   });
 });

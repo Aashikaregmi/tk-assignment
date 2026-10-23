@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
 import { AuditModule } from '@modules/audit';
 import { IdentityModule } from '@modules/identity';
+import { OutboxModule } from '@modules/outbox';
 import { ApplicationsController } from './api/applications.controller';
 import { ApplicationRepository } from './application/application-repository';
 import { AssignReviewerHandler } from './application/assign-reviewer';
@@ -15,12 +16,12 @@ import {
   GetApplicationHandler,
   ListApplicationsHandler,
 } from './infrastructure/application-query-handlers';
-import { AuditEventPublisher } from './infrastructure/audit-event-publisher';
 import { IdentityReviewerDirectory } from './infrastructure/identity-reviewer-directory';
+import { TransactionalEventPublisher } from './infrastructure/transactional-event-publisher';
 import { TypeOrmApplicationRepository } from './infrastructure/typeorm-application.repository';
 
 @Module({
-  imports: [CqrsModule, IdentityModule, AuditModule],
+  imports: [CqrsModule, IdentityModule, AuditModule, OutboxModule],
   controllers: [ApplicationsController],
   providers: [
     CreateApplicationHandler,
@@ -32,7 +33,7 @@ import { TypeOrmApplicationRepository } from './infrastructure/typeorm-applicati
     ListApplicationsHandler,
     { provide: ApplicationRepository, useClass: TypeOrmApplicationRepository },
     { provide: ReviewerDirectory, useClass: IdentityReviewerDirectory },
-    { provide: DomainEventPublisher, useClass: AuditEventPublisher },
+    { provide: DomainEventPublisher, useClass: TransactionalEventPublisher },
   ],
 })
 export class ApplicationsModule {}
