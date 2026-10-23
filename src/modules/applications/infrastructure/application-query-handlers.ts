@@ -78,6 +78,7 @@ function toView(row: ApplicationOrmEntity): ApplicationView {
     riskStatus: row.riskStatus,
     createdBy: row.createdBy,
     assignedReviewerId: row.assignedReviewerId,
+    decisionReason: row.decisionReason,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
