@@ -10,6 +10,8 @@ describe('loadConfig', () => {
       LOG_LEVEL: 'info',
       DB_HOST: 'localhost',
       DB_PORT: 5432,
+      REDIS_HOST: 'localhost',
+      REDIS_PORT: 6379,
       ...app,
     });
   });
@@ -21,10 +23,9 @@ describe('loadConfig', () => {
   });
 
   it('converts numeric strings', () => {
-    expect(loadConfig(AppConfig, { ...app, PORT: '8080', DB_PORT: '6543' })).toMatchObject({
-      PORT: 8080,
-      DB_PORT: 6543,
-    });
+    expect(
+      loadConfig(AppConfig, { ...app, PORT: '8080', DB_PORT: '6543', REDIS_PORT: '6380' }),
+    ).toMatchObject({ PORT: 8080, DB_PORT: 6543, REDIS_PORT: 6380 });
   });
 
   it('drops undeclared variables', () => {

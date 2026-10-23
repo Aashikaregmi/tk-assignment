@@ -44,8 +44,8 @@ jobs:
             echo "::add-mask::$value"
             echo "$name=$value" >> "$GITHUB_ENV"
           done
-      # Same compose service and init script as local development.
-      - run: docker compose up --detach --wait postgres
+      # Same compose services and init script as local development.
+      - run: docker compose up --detach --wait postgres redis
       - run: npm ci
       - run: npm run test:e2e
 

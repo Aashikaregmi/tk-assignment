@@ -51,6 +51,16 @@ export class AppConfig extends DatabaseConfig {
   @IsString()
   @MinLength(32)
   JWT_SECRET!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  REDIS_HOST: string = 'localhost';
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  REDIS_PORT: number = 6379;
 }
 
 export function loadConfig<T extends object>(
