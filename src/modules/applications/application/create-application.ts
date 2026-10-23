@@ -6,6 +6,7 @@ import { assertCanCreate } from '../domain/access-policy';
 import { MerchantApplication } from '../domain/merchant-application';
 import { ApplicationDetailsInput, toDetails } from './application-input';
 import { ApplicationRepository } from './application-repository';
+import { DomainEventPublisher } from './domain-event-publisher';
 
 export class CreateApplicationCommand extends Command<{ id: string }> {
   constructor(
@@ -21,6 +22,7 @@ export class CreateApplicationHandler implements ICommandHandler<CreateApplicati
   constructor(
     private readonly uow: UnitOfWork,
     private readonly applications: ApplicationRepository,
+    private readonly events: DomainEventPublisher,
   ) {}
 
   execute({ actor, details }: CreateApplicationCommand): Promise<{ id: string }> {
@@ -28,6 +30,7 @@ export class CreateApplicationHandler implements ICommandHandler<CreateApplicati
     return this.uow.run(async () => {
       const application = MerchantApplication.create(randomUUID(), actor.id, toDetails(details));
       await this.applications.save(application);
+      await this.events.publish(actor.id, application.pullEvents());
       return { id: application.id };
     });
   }

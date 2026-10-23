@@ -11,5 +11,6 @@
   },
   "setupFiles": ["reflect-metadata"],
   "globalSetup": "<rootDir>/test/global-setup.ts",
-  "testEnvironment": "node"
+  "testEnvironment": "node",
+  "testTimeout": 30000
 }

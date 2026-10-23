@@ -4,6 +4,7 @@ import type { Actor } from '@shared/domain/role';
 import { assertCanEdit } from '../domain/access-policy';
 import { ApplicationNotFound } from '../domain/errors';
 import { ApplicationRepository } from './application-repository';
+import { DomainEventPublisher } from './domain-event-publisher';
 
 export class SubmitApplicationCommand extends Command<void> {
   constructor(
@@ -19,6 +20,7 @@ export class SubmitApplicationHandler implements ICommandHandler<SubmitApplicati
   constructor(
     private readonly uow: UnitOfWork,
     private readonly applications: ApplicationRepository,
+    private readonly events: DomainEventPublisher,
   ) {}
 
   execute({ actor, id }: SubmitApplicationCommand): Promise<void> {
@@ -28,6 +30,7 @@ export class SubmitApplicationHandler implements ICommandHandler<SubmitApplicati
       assertCanEdit(actor, application);
       application.submit();
       await this.applications.save(application);
+      await this.events.publish(actor.id, application.pullEvents());
     });
   }
 }

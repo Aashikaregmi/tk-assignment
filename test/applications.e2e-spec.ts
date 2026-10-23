@@ -423,4 +423,66 @@ describe('applications (e2e)', () => {
       });
     });
   });
+
+  describe('audit trail', () => {
+    interface AuditPage {
+      items: { actorId: string; action: string; entityId: string; metadata: object }[];
+      total: number;
+    }
+    const auditOf = async (query: string) =>
+      (await as('admin').get(`/audit?${query}`).expect(200)).body as AuditPage;
+
+    it('records who did what, newest first, with no applicant data', async () => {
+      const id = await awaitingDecision();
+      await as('reviewer')
+        .post(`/applications/${id}/decision`, {
+          decision: 'REQUEST_INFO',
+          reason: 'Please confirm the monthly volume',
+        })
+        .expect(200);
+
+      const audit = await auditOf(`entityId=${id}`);
+
+      expect(
+        audit.items.map(({ actorId, action, metadata }) => ({ actorId, action, metadata })),
+      ).toEqual([
+        {
+          actorId: ids.reviewer,
+          action: 'ApplicationDecided',
+          metadata: { decision: 'REQUEST_INFO', reason: 'Please confirm the monthly volume' },
+        },
+        { actorId: ids.admin, action: 'ReviewerAssigned', metadata: { reviewerId: ids.reviewer } },
+        { actorId: ids.salesA, action: 'ApplicationSubmitted', metadata: { submissionNo: 1 } },
+        { actorId: ids.salesA, action: 'ApplicationCreated', metadata: { createdBy: ids.salesA } },
+      ]);
+      const { fullName, email, phone } = input.ownerContact;
+      for (const value of [fullName, email, phone]) {
+        expect(JSON.stringify(audit)).not.toContain(value);
+      }
+    });
+
+    it('filters by entity and pages', async () => {
+      const first = await submittedBy('salesA');
+      const other = await submittedBy('salesA');
+
+      const page = await auditOf(`entityId=${first}&limit=1&page=2`);
+
+      expect(page.total).toBe(2);
+      expect(page.items).toEqual([
+        expect.objectContaining({ entityId: first, action: 'ApplicationCreated' }),
+      ]);
+      const all = await auditOf('limit=100');
+      expect(all.items.map(({ entityId }) => entityId)).toEqual(
+        expect.arrayContaining([first, other]),
+      );
+    });
+
+    it.each<User>(['salesA', 'reviewer'])('%s cannot read the audit log: 403', async (user) => {
+      await as(user).get('/audit').expect(403);
+    });
+
+    it('rejects a malformed entityId: 400', async () => {
+      await as('admin').get('/audit?entityId=not-a-uuid').expect(400);
+    });
+  });
 });

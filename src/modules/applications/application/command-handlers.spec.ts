@@ -10,11 +10,13 @@ import {
   InvalidStatusTransition,
   NotAssignedReviewer,
 } from '../domain/errors';
+import type { ApplicationEvent } from '../domain/events';
 import { MerchantApplication, MerchantApplicationState } from '../domain/merchant-application';
 import { ApplicationDetailsInput } from './application-input';
 import { ApplicationRepository } from './application-repository';
 import { AssignReviewerCommand, AssignReviewerHandler } from './assign-reviewer';
 import { CreateApplicationCommand, CreateApplicationHandler } from './create-application';
+import { DomainEventPublisher } from './domain-event-publisher';
 import { RecordDecisionCommand, RecordDecisionHandler } from './record-decision';
 import { ReviewerDirectory } from './reviewer-directory';
 import { SubmitApplicationCommand, SubmitApplicationHandler } from './submit-application';
@@ -52,6 +54,19 @@ class InMemoryApplications implements ApplicationRepository {
   }
 }
 
+// Records what would be written; like the repository, only inside a unit of work.
+class RecordingPublisher implements DomainEventPublisher {
+  readonly published: { actorId: string | null; type: string }[] = [];
+
+  constructor(private readonly uow: FakeUnitOfWork) {}
+
+  publish(actorId: string | null, events: readonly ApplicationEvent[]): Promise<void> {
+    if (!this.uow.active) throw new Error('publish outside a unit of work');
+    this.published.push(...events.map(({ type }) => ({ actorId, type })));
+    return Promise.resolve();
+  }
+}
+
 const SALES_A: Actor = { id: 'sales-a', role: 'SALES' };
 const SALES_B: Actor = { id: 'sales-b', role: 'SALES' };
 const REVIEWER: Actor = { id: 'reviewer-1', role: 'REVIEWER' };
@@ -74,6 +89,7 @@ const input: ApplicationDetailsInput = {
 describe('application command handlers', () => {
   let uow: FakeUnitOfWork;
   let applications: InMemoryApplications;
+  let events: RecordingPublisher;
   let create: CreateApplicationHandler;
   let update: UpdateApplicationHandler;
   let submit: SubmitApplicationHandler;
@@ -83,11 +99,12 @@ describe('application command handlers', () => {
   beforeEach(() => {
     uow = new FakeUnitOfWork();
     applications = new InMemoryApplications(uow);
-    create = new CreateApplicationHandler(uow, applications);
-    update = new UpdateApplicationHandler(uow, applications);
-    submit = new SubmitApplicationHandler(uow, applications);
-    assign = new AssignReviewerHandler(uow, applications, reviewers);
-    decide = new RecordDecisionHandler(uow, applications);
+    events = new RecordingPublisher(uow);
+    create = new CreateApplicationHandler(uow, applications, events);
+    update = new UpdateApplicationHandler(uow, applications, events);
+    submit = new SubmitApplicationHandler(uow, applications, events);
+    assign = new AssignReviewerHandler(uow, applications, reviewers, events);
+    decide = new RecordDecisionHandler(uow, applications, events);
   });
 
   const createAs = async (actor: Actor) =>
@@ -295,6 +312,39 @@ describe('application command handlers', () => {
       await expect(
         decide.execute(new RecordDecisionCommand(REVIEWER, id, 'APPROVE')),
       ).rejects.toThrow(ApplicationNotFound);
+    });
+  });
+
+  describe('events', () => {
+    it('every command publishes its events with the acting user', async () => {
+      const id = await createAs(SALES_A);
+      await update.execute(new UpdateApplicationCommand(SALES_A, id, { businessName: 'Renamed' }));
+      await submit.execute(new SubmitApplicationCommand(SALES_A, id));
+      await assign.execute(new AssignReviewerCommand(ADMIN, id, REVIEWER.id));
+      applications.rows.set(id, { ...stored(id)!, riskStatus: 'LOW' });
+      await decide.execute(new RecordDecisionCommand(REVIEWER, id, 'APPROVE'));
+
+      expect(events.published).toEqual([
+        { actorId: SALES_A.id, type: 'ApplicationCreated' },
+        { actorId: SALES_A.id, type: 'ApplicationUpdated' },
+        { actorId: SALES_A.id, type: 'ApplicationSubmitted' },
+        { actorId: ADMIN.id, type: 'ReviewerAssigned' },
+        { actorId: REVIEWER.id, type: 'ApplicationDecided' },
+      ]);
+    });
+
+    it('a refused command publishes nothing', async () => {
+      const id = await createAs(SALES_A);
+      events.published.length = 0;
+
+      await expect(
+        update.execute(new UpdateApplicationCommand(SALES_B, id, { businessName: 'Hijacked' })),
+      ).rejects.toThrow(ApplicationNotFound);
+      await expect(submit.execute(new SubmitApplicationCommand(REVIEWER, id))).rejects.toThrow(
+        ApplicationNotFound,
+      );
+
+      expect(events.published).toEqual([]);
     });
   });
 });

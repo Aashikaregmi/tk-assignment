@@ -4,6 +4,7 @@ import type { Actor } from '@shared/domain/role';
 import { assertCanAssign } from '../domain/access-policy';
 import { ApplicationNotFound, InvalidReviewer } from '../domain/errors';
 import { ApplicationRepository } from './application-repository';
+import { DomainEventPublisher } from './domain-event-publisher';
 import { ReviewerDirectory } from './reviewer-directory';
 
 export class AssignReviewerCommand extends Command<void> {
@@ -22,6 +23,7 @@ export class AssignReviewerHandler implements ICommandHandler<AssignReviewerComm
     private readonly uow: UnitOfWork,
     private readonly applications: ApplicationRepository,
     private readonly reviewers: ReviewerDirectory,
+    private readonly events: DomainEventPublisher,
   ) {}
 
   execute({ actor, id, reviewerId }: AssignReviewerCommand): Promise<void> {
@@ -33,6 +35,7 @@ export class AssignReviewerHandler implements ICommandHandler<AssignReviewerComm
       if (!(await this.reviewers.isReviewer(reviewerId))) throw new InvalidReviewer();
       application.assignReviewer(reviewerId);
       await this.applications.save(application);
+      await this.events.publish(actor.id, application.pullEvents());
     });
   }
 }
