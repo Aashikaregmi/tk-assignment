@@ -5,6 +5,7 @@ import { assertCanEdit } from '../domain/access-policy';
 import { ApplicationNotFound } from '../domain/errors';
 import { ApplicationDetailsInput, toChanges } from './application-input';
 import { ApplicationRepository } from './application-repository';
+import { DomainEventPublisher } from './domain-event-publisher';
 
 export class UpdateApplicationCommand extends Command<void> {
   constructor(
@@ -21,6 +22,7 @@ export class UpdateApplicationHandler implements ICommandHandler<UpdateApplicati
   constructor(
     private readonly uow: UnitOfWork,
     private readonly applications: ApplicationRepository,
+    private readonly events: DomainEventPublisher,
   ) {}
 
   execute({ actor, id, changes }: UpdateApplicationCommand): Promise<void> {
@@ -30,6 +32,7 @@ export class UpdateApplicationHandler implements ICommandHandler<UpdateApplicati
       assertCanEdit(actor, application);
       application.update(toChanges(changes));
       await this.applications.save(application);
+      await this.events.publish(actor.id, application.pullEvents());
     });
   }
 }

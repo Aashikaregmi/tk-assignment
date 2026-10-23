@@ -5,6 +5,7 @@ import { assertCanRead } from '../domain/access-policy';
 import type { Decision } from '../domain/application-status';
 import { ApplicationNotFound } from '../domain/errors';
 import { ApplicationRepository } from './application-repository';
+import { DomainEventPublisher } from './domain-event-publisher';
 
 export class RecordDecisionCommand extends Command<void> {
   constructor(
@@ -22,6 +23,7 @@ export class RecordDecisionHandler implements ICommandHandler<RecordDecisionComm
   constructor(
     private readonly uow: UnitOfWork,
     private readonly applications: ApplicationRepository,
+    private readonly events: DomainEventPublisher,
   ) {}
 
   // The row lock makes concurrent decisions queue: the second sees the first's result.
@@ -32,6 +34,7 @@ export class RecordDecisionHandler implements ICommandHandler<RecordDecisionComm
       assertCanRead(actor, application);
       application.decide(actor, decision, reason);
       await this.applications.save(application);
+      await this.events.publish(actor.id, application.pullEvents());
     });
   }
 }
