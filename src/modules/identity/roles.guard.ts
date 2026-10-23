@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Role } from '@shared/domain/role';
-import { AuthenticatedRequest, IS_PUBLIC_KEY, ROLES_KEY } from './auth.decorators';
+import { AuthenticatedRequest, IS_PUBLIC_KEY, ROLES_KEY } from '@shared/api/auth.decorators';
 
 // Runs after JwtAuthGuard. Returning false makes Nest respond 403.
 @Injectable()

@@ -1,7 +1,7 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { AuthenticatedRequest, Public, Roles } from './auth.decorators';
+import { AuthenticatedRequest, Public, Roles } from '@shared/api/auth.decorators';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { jwtOptions } from './jwt-options';
 import { RolesGuard } from './roles.guard';

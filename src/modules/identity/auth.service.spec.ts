@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { jwtOptions } from './jwt-options';
 import { PasswordHasher } from './password-hasher';
+import { RefreshTokenService } from './refresh-token.service';
 import { UserOrmEntity } from './user.orm-entity';
 import { UsersService } from './users.service';
 
@@ -26,7 +27,13 @@ describe('AuthService', () => {
     const users = {
       findByEmail: (email: string) => Promise.resolve(email === user.email ? user : null),
     };
-    auth = new AuthService(users as unknown as UsersService, hasher, jwt);
+    const refreshTokens = { issue: () => Promise.resolve('opaque-refresh-token') };
+    auth = new AuthService(
+      users as unknown as UsersService,
+      hasher,
+      jwt,
+      refreshTokens as unknown as RefreshTokenService,
+    );
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -34,7 +41,12 @@ describe('AuthService', () => {
   it('issues a 15-minute HS256 access token with sub, role, iss and aud', async () => {
     const result = await auth.login(user.email, PASSWORD);
 
-    expect(result).toMatchObject({ tokenType: 'Bearer', expiresIn: 900 });
+    expect(result).toMatchObject({
+      tokenType: 'Bearer',
+      expiresIn: 900,
+      refreshToken: 'opaque-refresh-token',
+      refreshExpiresIn: 7 * 24 * 3600,
+    });
     const claims = await jwt.verifyAsync<Record<string, unknown>>(result.accessToken);
     expect(claims).toMatchObject({
       sub: user.id,
