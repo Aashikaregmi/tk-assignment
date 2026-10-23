@@ -1,5 +1,5 @@
 import type { DomainEvent } from '@shared/domain/aggregate-root';
-import type { Decision } from './application-status';
+import type { Decision, RiskResult } from './application-status';
 
 // Events carry ids and field names, never applicant data.
 export interface ApplicationCreated extends DomainEvent {
@@ -30,9 +30,22 @@ export interface ApplicationDecided extends DomainEvent {
   readonly reason: string | null;
 }
 
+export interface RiskReviewCompleted extends DomainEvent {
+  readonly type: 'RiskReviewCompleted';
+  readonly submissionNo: number;
+  readonly result: RiskResult;
+}
+
+export interface RiskReviewFailed extends DomainEvent {
+  readonly type: 'RiskReviewFailed';
+  readonly submissionNo: number;
+}
+
 export type ApplicationEvent =
   | ApplicationCreated
   | ApplicationUpdated
   | ApplicationSubmitted
   | ReviewerAssigned
-  | ApplicationDecided;
+  | ApplicationDecided
+  | RiskReviewCompleted
+  | RiskReviewFailed;
