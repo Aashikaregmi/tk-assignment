@@ -22,6 +22,7 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CurrentUser, Roles } from '@shared/api/auth.decorators';
+import { Idempotent } from '@shared/api/idempotency';
 import type { Actor } from '@shared/domain/role';
 import { GetApplicationQuery, ListApplicationsQuery } from '../application/application-queries';
 import { AssignReviewerCommand } from '../application/assign-reviewer';
@@ -52,6 +53,7 @@ export class ApplicationsController {
 
   @Post()
   @Roles('SALES', 'ADMIN')
+  @Idempotent()
   @ApiCreatedResponse({ type: ApplicationResponse })
   @ApiUnprocessableEntityResponse({ description: 'Business rule violated' })
   async create(
@@ -101,6 +103,7 @@ export class ApplicationsController {
   @Post(':id/submit')
   @HttpCode(HttpStatus.OK)
   @Roles('SALES', 'ADMIN')
+  @Idempotent()
   @ApiOkResponse({ type: ApplicationResponse })
   @ApiNotFoundResponse({ description: 'Missing, or not visible to you' })
   @ApiConflictResponse({ description: 'Already submitted or decided' })
@@ -116,6 +119,7 @@ export class ApplicationsController {
   @Post(':id/assignment')
   @HttpCode(HttpStatus.OK)
   @Roles('ADMIN')
+  @Idempotent()
   @ApiOkResponse({ type: ApplicationResponse })
   @ApiNotFoundResponse({ description: 'Missing' })
   @ApiConflictResponse({ description: 'Not in SUBMITTED' })
@@ -132,6 +136,7 @@ export class ApplicationsController {
   @Post(':id/decision')
   @HttpCode(HttpStatus.OK)
   @Roles('REVIEWER')
+  @Idempotent()
   @ApiOkResponse({ type: ApplicationResponse })
   @ApiForbiddenResponse({ description: 'Not the assigned reviewer' })
   @ApiNotFoundResponse({ description: 'Missing, or not visible to you' })
