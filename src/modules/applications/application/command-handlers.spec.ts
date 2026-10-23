@@ -17,10 +17,12 @@ import { ApplicationRepository } from './application-repository';
 import { AssignReviewerCommand, AssignReviewerHandler } from './assign-reviewer';
 import { CreateApplicationCommand, CreateApplicationHandler } from './create-application';
 import { DomainEventPublisher } from './domain-event-publisher';
+import { FailRiskReviewCommand, FailRiskReviewHandler } from './fail-risk-review';
 import { ProcessRiskReviewCommand, ProcessRiskReviewHandler } from './process-risk-review';
 import { RecordDecisionCommand, RecordDecisionHandler } from './record-decision';
 import { ReviewerDirectory } from './reviewer-directory';
 import { RiskAssessmentRequest, RiskProvider } from './risk-provider';
+import { RiskReview, RiskReviewRepository } from './risk-review-repository';
 import { SubmitApplicationCommand, SubmitApplicationHandler } from './submit-application';
 import { UpdateApplicationCommand, UpdateApplicationHandler } from './update-application';
 
@@ -87,6 +89,25 @@ class FakeRiskProvider implements RiskProvider {
     this.calls.push({ request, key });
     this.duringCall();
     return Promise.resolve({ result: 'MEDIUM' as const, score: 55 });
+  }
+}
+
+// Like the database: only inside a unit of work, and one review per submission.
+class InMemoryRiskReviews implements RiskReviewRepository {
+  readonly rows: RiskReview[] = [];
+
+  constructor(private readonly uow: FakeUnitOfWork) {}
+
+  add(review: RiskReview): Promise<void> {
+    if (!this.uow.active) throw new Error('review added outside a unit of work');
+    const { applicationId, submissionNo } = review;
+    if (
+      this.rows.some((r) => r.applicationId === applicationId && r.submissionNo === submissionNo)
+    ) {
+      throw new Error('duplicate review for this submission');
+    }
+    this.rows.push(review);
+    return Promise.resolve();
   }
 }
 
@@ -373,11 +394,15 @@ describe('application command handlers', () => {
 
   describe('process risk review', () => {
     let provider: FakeRiskProvider;
+    let reviews: InMemoryRiskReviews;
     let review: ProcessRiskReviewHandler;
+    let fail: FailRiskReviewHandler;
 
     beforeEach(() => {
       provider = new FakeRiskProvider(uow);
-      review = new ProcessRiskReviewHandler(uow, applications, provider, events);
+      reviews = new InMemoryRiskReviews(uow);
+      review = new ProcessRiskReviewHandler(uow, applications, provider, reviews, events);
+      fail = new FailRiskReviewHandler(uow, applications, reviews, events);
     });
 
     const submitted = async () => {
@@ -405,6 +430,9 @@ describe('application command handlers', () => {
         },
       ]);
       expect(stored(id)?.riskStatus).toBe('MEDIUM');
+      expect(reviews.rows).toEqual([
+        { applicationId: id, submissionNo: 1, result: 'MEDIUM', score: 55 },
+      ]);
       expect(events.published).toEqual([{ actorId: null, type: 'RiskReviewCompleted' }]);
     });
 
@@ -415,6 +443,7 @@ describe('application command handlers', () => {
       await review.execute(new ProcessRiskReviewCommand(id, 1));
 
       expect(provider.calls).toHaveLength(1);
+      expect(reviews.rows).toHaveLength(1);
       expect(events.published).toHaveLength(1);
     });
 
@@ -442,7 +471,30 @@ describe('application command handlers', () => {
       await review.execute(new ProcessRiskReviewCommand(id, 1));
 
       expect(stored(id)).toMatchObject({ riskStatus: 'PENDING', submissionNo: 2 });
+      expect(reviews.rows).toEqual([]);
       expect(events.published).toEqual([]);
+    });
+
+    it('marks the review FAILED once retries are exhausted, as the system', async () => {
+      const id = await submitted();
+
+      await fail.execute(new FailRiskReviewCommand(id, 1));
+
+      expect(stored(id)?.riskStatus).toBe('FAILED');
+      expect(reviews.rows).toEqual([
+        { applicationId: id, submissionNo: 1, result: 'FAILED', score: null },
+      ]);
+      expect(events.published).toEqual([{ actorId: null, type: 'RiskReviewFailed' }]);
+    });
+
+    it('a late failure after the result changes nothing', async () => {
+      const id = await submitted();
+      await review.execute(new ProcessRiskReviewCommand(id, 1));
+
+      await fail.execute(new FailRiskReviewCommand(id, 1));
+
+      expect(stored(id)?.riskStatus).toBe('MEDIUM');
+      expect(reviews.rows).toHaveLength(1);
     });
   });
 });

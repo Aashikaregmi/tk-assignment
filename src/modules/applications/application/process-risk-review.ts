@@ -3,6 +3,7 @@ import { UnitOfWork } from '@shared/application/unit-of-work';
 import { ApplicationRepository } from './application-repository';
 import { DomainEventPublisher } from './domain-event-publisher';
 import { RiskProvider } from './risk-provider';
+import { RiskReviewRepository } from './risk-review-repository';
 
 // From the risk-review queue: one job per submission.
 export class ProcessRiskReviewCommand extends Command<void> {
@@ -20,6 +21,7 @@ export class ProcessRiskReviewHandler implements ICommandHandler<ProcessRiskRevi
     private readonly uow: UnitOfWork,
     private readonly applications: ApplicationRepository,
     private readonly provider: RiskProvider,
+    private readonly reviews: RiskReviewRepository,
     private readonly events: DomainEventPublisher,
   ) {}
 
@@ -30,7 +32,7 @@ export class ProcessRiskReviewHandler implements ICommandHandler<ProcessRiskRevi
 
     // Outside any transaction: no row lock is held while a third party responds.
     const { legalBusinessName, businessType, processingInfo } = snapshot.toState();
-    const { result } = await this.provider.assess(
+    const { result, score } = await this.provider.assess(
       { legalBusinessName, businessType, ...processingInfo },
       `${applicationId}:${submissionNo}`,
     );
@@ -43,6 +45,7 @@ export class ProcessRiskReviewHandler implements ICommandHandler<ProcessRiskRevi
       const events = application.pullEvents();
       if (events.length === 0) return;
       await this.applications.save(application);
+      await this.reviews.add({ applicationId, submissionNo, result, score });
       await this.events.publish(null, events);
     });
   }

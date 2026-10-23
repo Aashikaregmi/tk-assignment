@@ -12,6 +12,7 @@ describe('loadConfig', () => {
       DB_PORT: 5432,
       REDIS_HOST: 'localhost',
       REDIS_PORT: 6379,
+      RISK_PROVIDER_FAILURES: 0,
       ...app,
     });
   });

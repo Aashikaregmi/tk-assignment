@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppConfig } from '@shared/infrastructure/config/app-config';
+import { RiskReviewWorker } from '@modules/applications';
 import { OutboxRelay } from '@modules/outbox';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
@@ -20,6 +21,7 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(app.get(AppConfig).PORT);
   app.get(OutboxRelay).start();
+  app.get(RiskReviewWorker).start();
 }
 
 void bootstrap();

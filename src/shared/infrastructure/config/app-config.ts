@@ -61,6 +61,12 @@ export class AppConfig extends DatabaseConfig {
   @Min(1)
   @Max(65535)
   REDIS_PORT: number = 6379;
+
+  // Simulated risk provider: fail the first N calls for each submission (retry demos and tests).
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  RISK_PROVIDER_FAILURES: number = 0;
 }
 
 export function loadConfig<T extends object>(
