@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppConfig } from '@shared/infrastructure/config/app-config';
+import { OutboxRelay } from '@modules/outbox';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
@@ -18,6 +19,7 @@ async function bootstrap(): Promise<void> {
   SwaggerModule.setup('docs', app, () => SwaggerModule.createDocument(app, swaggerConfig));
 
   await app.listen(app.get(AppConfig).PORT);
+  app.get(OutboxRelay).start();
 }
 
 void bootstrap();

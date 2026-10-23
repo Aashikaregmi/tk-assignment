@@ -9,6 +9,7 @@ services:
       DB_USER: ${DB_USER:?set DB_USER in .env}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      REDIS_HOST: redis
     ports:
       - 127.0.0.1:3000:3000
     depends_on:
